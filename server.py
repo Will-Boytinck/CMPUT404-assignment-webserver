@@ -43,59 +43,41 @@ class MyWebServer(socketserver.BaseRequestHandler):
         url_protocol = ""
         mime_type = ""
         
-        
         self.data = self.request.recv(1024).strip().decode(self.encoding)
         
         # get all files in ./www
         # https://stackoverflow.com/questions/3207219/how-do-i-list-all-files-of-a-directory
-        www_files = [f for f in listdir(self.dir_path) if isfile(join(self.dir_path, f))]
-            # returns base.css
-
-        # parse entire request, get vars with pertinent data first
+        www_files = [os.path.join(dirpath,f) for (dirpath, dirnames, filenames) in os.walk(self.dir_path) for f in filenames]
         data_list = self.data.split()
-        
         # check if the request contains all the required information
         try:
             url_method = data_list[0]
             url_path = data_list[1]
-            # returns /base.css
             url_protocol = data_list[2]
-           
         # not in the specs, but I made it anyways because I can't read    
         except Exception:
             self.return_400_bad_request()
             return
-        
         # update our file path    
         file_path = self.dir_path + url_path     
-        
         # if a GET request is served [method-path-protocol]
+
         if url_method == "GET":
-            
-            # path not in ./www, return a 404
-            
-            print("test1", url_path.strip("/"))
-            print("test2", www_files)
-            print("test3", url_path)
-            
-            
-            if url_path.strip("/") not in www_files: # TODO: this is broken
+            # path not in ./www, return a 404 
+            if url_path.strip("www") not in www_files: # TODO: this is broken
+                print("TEST-A",url_path)
                 self.return_404_not_found()
                 return
-            
             # not a file, return a 301 / fix directory edgecase
             if url_path[-1] == "/":
                  mime_type = "text/html;"
                  file_path += mime_type
                  self.return_301_moved_permanently(file_path);
-             
             # determine mime_type
             if pathlib.Path(url_path).suffix == ".css":
                 mime_type = "text/css;"
-            
             elif pathlib.Path(url_path).suffix == ".html":
                 mime_type = "text/html;"
-                
             # tests seem good, return file contents 
             with open(file_path, 'r') as my_file:
                 data = my_file.read()
