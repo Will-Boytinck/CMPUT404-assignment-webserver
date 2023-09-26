@@ -2,6 +2,9 @@
 import socketserver
 from os import listdir
 from os.path import isfile, join
+import os
+import pathlib
+
 
 # Copyright 2023 Abram Hindle, Eddie Antonio Santos, William Boytinck
 # 
@@ -30,48 +33,108 @@ from os.path import isfile, join
 
 
 class MyWebServer(socketserver.BaseRequestHandler):
-    
+    # TODO: Run unix2dos on runner.sh (TEST ON LAB MACHINES)
           
     def handle(self):
         self.dir_path = "www"
         self.encoding = "utf-8"
+        url_method = ""
+        url_path = ""
+        url_protocol = ""
+        mime_type = ""
         
-        self.data = self.request.recv(1024).strip()
-        print ("Got a request of: %s\n" % self.data)
-        #self.request.sendall(bytearray("OK",'utf-8'))
         
-
-        # 1.a get all files in ./www
-             # https://stackoverflow.com/questions/3207219/how-do-i-list-all-files-of-a-directory
-        www_files = [f for f in listdir(self.dir_path) if isfile(join(self.dir_path, f))]    
+        self.data = self.request.recv(1024).strip().decode(self.encoding)
         
-        #self.request.sendall(bytearray("The following are links in ./www:\n", self.encoding))
-        #for afile in www_files:
-        #    afile += '\n'
-        #    self.request.sendall(bytearray(afile, self.encoding))
-        
+        # get all files in ./www
+        # https://stackoverflow.com/questions/3207219/how-do-i-list-all-files-of-a-directory
+        www_files = [f for f in listdir(self.dir_path) if isfile(join(self.dir_path, f))]
+            # returns base.css
 
         # parse entire request, get vars with pertinent data first
         data_list = self.data.split()
-        url_method = data_list[0]
-        url_path = data_list[1]
-        url_protocol = data_list[2]
-
-        # if a GET request is served [method-pass-protocol]
-        if url_method == "GET":
-            pass
-
         
-            # check if url in www_files (might have to split it again...)
-
+        # check if the request contains all the required information
+        try:
+            url_method = data_list[0]
+            url_path = data_list[1]
+            # returns /base.css
+            url_protocol = data_list[2]
+           
+        # not in the specs, but I made it anyways because I can't read    
+        except Exception:
+            self.return_400_bad_request()
+            return
+        
+        # update our file path    
+        file_path = self.dir_path + url_path     
+        
+        # if a GET request is served [method-path-protocol]
+        if url_method == "GET":
+            
+            # path not in ./www, return a 404
+            
+            print("test1", url_path.strip("/"))
+            print("test2", www_files)
+            print("test3", url_path)
+            
+            
+            if url_path.strip("/") not in www_files: # TODO: this is broken
+                self.return_404_not_found()
+                return
+            
+            # not a file, return a 301 / fix directory edgecase
+            if url_path[-1] == "/":
+                 mime_type = "text/html;"
+                 file_path += mime_type
+                 self.return_301_moved_permanently(file_path);
+             
+            # determine mime_type
+            if pathlib.Path(url_path).suffix == ".css":
+                mime_type = "text/css;"
+            
+            elif pathlib.Path(url_path).suffix == ".html":
+                mime_type = "text/html;"
+                
+            # tests seem good, return file contents 
+            with open(file_path, 'r') as my_file:
+                data = my_file.read()
+                self.return_200_success(mime_type, data)
+                my_file.close()
+            
+            return
 
         # a GET request is not served, return a 405 code
         else:
-            self.request.sendall(b"HTTP/1.1 405 Method Not Allowed\r\n")
-            
+            self.return_405_method()
+            return
         
         
-        
+    def return_200_success(self, mime_type, data):        
+        status = "HTTP/1.1 200 OK\r\n"
+        status += f"Content-Type: {mime_type}; charset={self.encoding}\r\n"
+        status += f"Content-Length: {len(data)}\r\n"
+        self.request.sendall(status.encode(self.encoding))
+        self.request.sendall(data.encode(self.encoding))
+    
+    
+    def return_404_not_found(self):
+        status = b"HTTP/1.1 404 File Not Found\r\n"
+        self.request.sendall(status)
+    
+    def return_301_moved_permanently(self, file_path):
+        status = b"HTTP/1.1 301 Moved Permanently\r\n"
+        self.request.sendall(status)
+        self.request.sendall(b"Location: %s/\r\n" % file_path + '/')
+    
+    def return_405_method(self):
+        status = b"HTTP/1.1 405 Method Not Allowed\r\n"
+        self.request.sendall(status)
+    
+    def return_400_bad_request(self):
+        status = b"HTTP/1.1 400 Bad Request\r\n"
+        self.request.sendall(status)
+    
         
 
 if __name__ == "__main__":
@@ -80,7 +143,6 @@ if __name__ == "__main__":
     socketserver.TCPServer.allow_reuse_address = True
     # Create the server, binding to localhost on port 8080
     server = socketserver.TCPServer((HOST, PORT), MyWebServer)
-
     # Activate the server; this will keep running until you
     # interrupt the program with Ctrl-C
     server.serve_forever()
