@@ -84,8 +84,8 @@ class MyWebServer(socketserver.BaseRequestHandler):
                     
                     # check if its a directory, then send a 200
                     elif url_path[-1] == "/" and os.path.isdir(full_path):
-                        url_path += "index.html" # redirection hardcode nonsense
-                        mime_type = self.get_mime_type(url_path)
+                        full_path += "index.html" # redirection hardcode nonsense
+                        mime_type = self.get_mime_type(full_path)
                         self.return_200_success(mime_type, full_path)
                         return 
                         
@@ -154,6 +154,7 @@ class MyWebServer(socketserver.BaseRequestHandler):
         self.request.sendall(status)
     
     def return_301_moved_permanently(self, file_path):
+        file_path += "/"
         status = f"HTTP/1.1 301 Moved Permanently\r\nLocation: {file_path}\r\nContent-type: text/plain; charset={self.encoding}\r\n"
         self.request.sendall(bytearray(status, self.encoding))
     
@@ -167,10 +168,9 @@ class MyWebServer(socketserver.BaseRequestHandler):
     
     def display_data(self, full_path):
         data = ""
-        if os.path.isfile(full_path):
-           data = open(full_path).read()
-           return data
-        return "bitch"
+        with open(full_path, "r") as my_file:
+            data = my_file.read()
+            return data
         
 
 if __name__ == "__main__":
